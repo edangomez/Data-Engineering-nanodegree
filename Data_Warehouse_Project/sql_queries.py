@@ -5,6 +5,12 @@ import configparser
 config = configparser.ConfigParser()
 config.read('dwh.cfg')
 
+LOG_DATA = config.get('S3', 'LOG_DATA')
+ARN = config.get('IAM_ROLE', 'ARN')
+LOG_JSONPATH = config.get('S3', 'LOG_JSONPATH')
+SONG_DATA = config.get('S3', 'SONG_DATA')
+
+
 # DROP TABLES
 
 staging_events_table_drop = "DROP TABLE IF EXISTS staging_events"
@@ -17,7 +23,7 @@ time_table_drop = "DROP TABLE IF EXISTS time"
 
 # CREATE TABLES
 
-staging_events_table_create= ("""
+staging_events_table_create = ("""
                               CREATE IF NOT EXISTS staging_events (
                                   event_id BIGINT IDENTITY(0,1),
                                   artist VARCHAR,
@@ -115,31 +121,128 @@ time_table_create = ("""
 # STAGING TABLES
 
 staging_events_copy = ("""
-""").format()
+                       COPY staging_events FROM {}
+                       credentials 'aws_iam_role={}'
+                       format as json {}
+                       STATUPDATE ON
+                       region 'us-west-2';
+""").format(LOG_DATA, ARN, LOG_JSONPATH)
 
 staging_songs_copy = ("""
-""").format()
+                      COPY staging_songs FROM {}
+                      credentials 'aws_iam_role={}'
+                      format as json 'auto'
+                      ACCEPTINVCHARS AS '^'
+                      STATUPDATE ON
+                      region 'us-west-2';
+""").format(SONG_DATA, ARN)
 
 # FINAL TABLES
 
 songplay_table_insert = ("""
+                         INSERT INTO songplays (
+                             start_time,
+                             user_id,
+                             level,
+                             song_id,
+                             artist_id,
+                             session_id,
+                             location,
+                             user_agent
+                         )
+                         SELECT DISTINCT se.ts,
+                            se.userId,
+                            se.level,
+                            ss.song_id,
+                            ss.artist_id,
+                            se.sessionId,
+                            se.location,
+                            se.userAgent
+                         FROM staging_events AS se JOIN staging_songs AS ss 
+                            ON se.song == ss.title AND se.artist == ss.artist_name
+                         WHERE se.page = 'NextSong';                      
 """)
 
 user_table_insert = ("""
+                     INSERT INTO users (
+                         user_id,
+                         first_name,
+                         last_name,
+                         gender,
+                         level
+                     )
+                     SELECT DISTINCT se.userId,
+                        se.firstName,
+                        se.lastName,
+                        se.gender,
+                        se.level
+                     FROM staging_events AS se
+                     WHERE se.userId IS NOT NULL;
 """)
 
 song_table_insert = ("""
+                     INSERT INTO songs(
+                         song_id,
+                         title,
+                         artist_id,
+                         year,
+                         duration
+                     )
+                     SELECT DISTINCT  ss.song_id,
+                        ss.title,
+                        ss.artist_id,
+                        ss.year,
+                        ss.duration
+                     FROM staging_songs AS ss
+                     WHERE ss.song_id IS NOT NULL;
 """)
 
 artist_table_insert = ("""
+                       INSERT INTO artists (
+                           artist_id,
+                           name,
+                           location,
+                           latitude,
+                           logitude
+                       )
+                       SELECT DISTINCT ss.artist_id, 
+                        ss.artist_name, 
+                        ss.artist_location,
+                        ss.artist_latitude,
+                        ss.artist_longitude
+                       FROM staging_songs AS ss
+                       WHERE ss.artist_id IS NOT NULL;
 """)
 
 time_table_insert = ("""
+                     INSERT INTO time (
+                         start_time,
+                         hour,
+                         day,
+                         week,
+                         month,
+                         year,
+                         weekday
+                     )
+                     SELECT DISTINCT se.ts,
+                        EXTRACT(hour FROM se.ts),
+                        EXTRACT(day FROM se.ts),
+                        EXTRACT(week FROM se.ts),
+                        EXTRACT(month FROM se.ts),
+                        EXTRACT(year FROM se.ts),
+                        EXTRACT(weekday FROM se.ts)
+                     FROM staging_events AS se
+                     WHERE se.page = 'NextSong';
 """)
 
 # QUERY LISTS
 
-create_table_queries = [staging_events_table_create, staging_songs_table_create, songplay_table_create, user_table_create, song_table_create, artist_table_create, time_table_create]
-drop_table_queries = [staging_events_table_drop, staging_songs_table_drop, songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop, time_table_drop]
+create_table_queries = [staging_events_table_create, staging_songs_table_create,
+                        songplay_table_create, user_table_create, song_table_create,
+                        artist_table_create, time_table_create]
+drop_table_queries = [staging_events_table_drop, staging_songs_table_drop,
+                      songplay_table_drop, user_table_drop, song_table_drop,
+                      artist_table_drop, time_table_drop]
 copy_table_queries = [staging_events_copy, staging_songs_copy]
-insert_table_queries = [songplay_table_insert, user_table_insert, song_table_insert, artist_table_insert, time_table_insert]
+insert_table_queries = [songplay_table_insert, user_table_insert, song_table_insert,
+                        artist_table_insert, time_table_insert]
