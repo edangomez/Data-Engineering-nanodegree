@@ -4,12 +4,26 @@ from sql_queries import copy_table_queries, insert_table_queries
 
 
 def load_staging_tables(cur, conn):
+    """runs all COPY commands for data transfer
+
+    Parameters
+    ----------
+    cur : database cursor
+    conn : database connector
+    """
     for query in copy_table_queries:
         cur.execute(query)
         conn.commit()
 
 
 def insert_tables(cur, conn):
+    """runs all INSERT commands
+
+    Parameters
+    ----------
+    cur : database cursor
+    conn : database connector
+    """
     for query in insert_table_queries:
         cur.execute(query)
         conn.commit()
@@ -21,7 +35,6 @@ def main():
 
     conn = psycopg2.connect("host={} dbname={} user={} password={} port={}".format(*config['CLUSTER'].values()))
     cur = conn.cursor()
-    
     load_staging_tables(cur, conn)
     insert_tables(cur, conn)
 
