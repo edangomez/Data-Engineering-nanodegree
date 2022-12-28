@@ -120,21 +120,18 @@ time_table_create = ("""
 # STAGING TABLES
 
 staging_events_copy = ("""
-                       COPY staging_events FROM {}
-                       credentials 'aws_iam_role={}'
-                       format as json {}
-                       STATUPDATE ON
-                       region 'us-west-2';
-""").format(LOG_DATA, ARN, LOG_JSONPATH)
+            COPY staging_events
+            FROM {}
+            iam_role {}
+            json {};
+        """).format(LOG_DATA, ARN, LOG_JSONPATH)
 
 staging_songs_copy = ("""
-                      COPY staging_songs FROM {}
-                      credentials 'aws_iam_role={}'
-                      format as json 'auto'
-                      ACCEPTINVCHARS AS '^'
-                      STATUPDATE ON
-                      region 'us-west-2';
-""").format(SONG_DATA, ARN)
+            COPY staging_songs
+            FROM {}
+            iam_role {}
+            json 'auto';
+        """).format(SONG_DATA, ARN)
 
 # FINAL TABLES
 
@@ -159,7 +156,7 @@ songplay_table_insert = ("""
                             se.userAgent
                          FROM staging_events AS se JOIN staging_songs AS ss 
                             ON se.song == ss.title AND se.artist == ss.artist_name
-                         WHERE se.page = 'NextSong';                      
+                         WHERE se.page = 'NextSong';                     
 """)
 
 user_table_insert = ("""
